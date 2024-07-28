@@ -1,23 +1,17 @@
-use burn::tensor::{backend::Backend, Tensor};
+use burn::{
+    backend::{wgpu::AutoGraphicsApi, Wgpu},
+    config::Config,
+    data::dataloader::batcher::Batcher,
+    module::Module,
+    record::{CompactRecorder, Recorder},
+};
+mod nn_backend;
 use nbdkit::*;
+use nn_backend::*;
 
 #[derive(Default)]
 struct MyDrive {
-    // The drive code I think??
-    _not_used: i32,
-}
-
-// temp learn burn
-
-fn computation<B: Backend>() {
-    let device = Default::default();
-    let tensor1: Tensor<B, 2> = Tensor::from_floats([[2., 3.], [2., 5.]], &device);
-    let tensor2 = Tensor::ones_like(&tensor1);
-    println!("{:}", tensor1 + tensor2);
-}
-
-pub fn learn() {
-    computation::<burn::backend::Wgpu>();
+    device: burn::backend::wgpu::WgpuDevice,
 }
 
 impl Server for MyDrive {
@@ -30,22 +24,40 @@ impl Server for MyDrive {
     }
 
     fn read_at(&self, buf: &mut [u8], offset: u64) -> Result<()> {
+        type MyBackend = Wgpu<AutoGraphicsApi, f32, i32>;
         // let's calculate the bits we need to get: offset * 8
-        (0..buf.len()).for_each(|byte| {
-            buf[byte] = y_equals_zero(offset + byte as u64);
-        });
-        todo!()
+        let config = trainer::TrainingConfig::load(format!("/temp/guide/config.json"))
+            .expect("Config should exist for the model");
+        let record = CompactRecorder::new()
+            .load(format!("/temp/guide/model").into(), &self.device)
+            .expect("Trained model should exist");
+        let model = config
+            .model
+            .init::<MyBackend>(&self.device)
+            .load_record(record);
+        let batcher = batcher::InternalBatcher::new(self.device.clone());
+        let batch = batcher.batch(
+            buf.iter()
+                .enumerate()
+                .map(|(i, &_v)| dataloader::DataItem {
+                    address: i as u64 + offset,
+                    value: 0u8,
+                })
+                .collect(),
+        );
+        model
+            .forward(batch.addresses)
+            .into_data()
+            .value
+            .iter()
+            .enumerate()
+            .for_each(|(i, &v)| buf[i] = v as u8);
+        return Ok(());
     }
 
     fn get_size(&self) -> Result<i64> {
         Ok(i64::MAX)
     }
-}
-
-// let's just define a few math functions to develop with, I'm learning the nbdkit api to start with
-
-fn y_equals_zero(_x: u64) -> u8 {
-    0
 }
 
 plugin!(MyDrive {});
