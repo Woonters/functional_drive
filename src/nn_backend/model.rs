@@ -23,7 +23,7 @@ pub struct Model<B: Backend> {
     activation: Relu,
 }
 
-#[derive(burn::config::Config, Debug)]
+#[derive(burn::config::Config, Debug, Default)]
 pub struct ModelConfig {
     pub input_size: usize,
     pub output_size: usize,

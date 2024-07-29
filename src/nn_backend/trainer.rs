@@ -54,6 +54,23 @@ pub struct TrainingConfig {
     pub learning_rate: f64,
 }
 
+impl Default for TrainingConfig {
+    fn default() -> Self {
+        Self {
+            model: crate::model::ModelConfig {
+                input_size: 64,
+                output_size: 1,
+            },
+            optimizer: AdamConfig::new(),
+            num_epochs: 20,
+            batch_size: 64,
+            num_workers: 4,
+            seed: 42,
+            learning_rate: 1.0e-2,
+        }
+    }
+}
+
 fn create_artifact_dir(artifact_dir: &str) {
     std::fs::remove_dir_all(artifact_dir).ok();
     std::fs::create_dir_all(artifact_dir).ok();
