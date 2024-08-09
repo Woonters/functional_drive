@@ -1,16 +1,10 @@
+#[allow(unused_variables)]
 use burn::{
     backend::{wgpu::AutoGraphicsApi, Autodiff, Wgpu},
     config::Config,
-    data::dataloader::{batcher::Batcher, DataLoaderBuilder},
-    module::Module,
-    optim::AdamConfig,
-    prelude::*,
-    record::{CompactRecorder, Recorder},
-    tensor::backend::AutodiffBackend,
-    train::{metric::LossMetric, LearnerBuilder},
+    data::dataloader::batcher::Batcher,
 };
 mod nn_backend;
-use model::Model;
 use nbdkit::*;
 use nn_backend::*;
 use trainer::TrainingConfig;
@@ -24,6 +18,8 @@ struct MyDrive {
 
 impl Default for MyDrive {
     fn default() -> Self {
+        type MyBackend = Wgpu<AutoGraphicsApi, f32, i32>;
+        type MyAutoDiffBackend = Autodiff<MyBackend>;
         let device = burn::backend::wgpu::WgpuDevice::default();
         let trainer_conf = TrainingConfig::load("/temp/guide/config.json")
             .expect("Config should exist for the model");
@@ -69,11 +65,10 @@ impl Server for MyDrive {
             .for_each(|(i, &v)| buf[i] = v as u8);
         Ok(())
     }
-
+    #[allow(unused_variables)]
     fn write_at(&self, buf: &[u8], offset: u64, flags: Flags) -> Result<()> {
-        type MyAutoDiffBackend = 
-        Autodiff<Wgpu<AutoGraphicsApi, f32, i32>>;        
-        self.nn_train(burn::backend::wgpu::WgpuDevice::default())
+        todo!();
+        // self.nn_train(burn::backend::wgpu::WgpuDevice::default())
     }
 
     fn get_size(&self) -> Result<i64> {
@@ -82,32 +77,28 @@ impl Server for MyDrive {
 }
 
 impl MyDrive {
-    fn nn_train(&self, device: B::Device) -> Result<()> {
-        type B = 
-Autodiff<Wgpu<AutoGraphicsApi, f32, i32>>;        
-B::seed(self.trainer_conf.seed);
-        let batcher_train = batcher::InternalBatcher::<B>::new(device.clone());
-        let batcher_valid = batcher::InternalBatcher::<B::InnerBackend>::new(device.clone());
-        let dataloader_train = DataLoaderBuilder::new(batcher_train)
-            .batch_size(self.trainer_conf.batch_size)
-            .shuffle(self.trainer_conf.seed)
-            .num_workers(self.trainer_conf.num_workers)
-            .build(dataloader::CustomDataset::new());
-        let dataloader_test = DataLoaderBuilder::new(batcher_valid)
-            .batch_size(self.trainer_conf.batch_size)
-            .shuffle(self.trainer_conf.seed)
-            .num_workers(self.trainer_conf.num_workers)
-            .build(dataloader::CustomDataset::new());
-        for epoch in 1..self.trainer_conf.num_epochs + 1 {
-            for (iteration, batch) in dataloader_train.iter().enumerate() {
-                let output =
-        self.model
-            .forward(batch.addresses)
-            .into_data()
-            }
-        }
-        Ok(())
-    }
+    // fn nn_train(&self, device: B::Device) -> Result<()> {
+    //     type B = Autodiff<Wgpu<AutoGraphicsApi, f32, i32>>;
+    //     B::seed(self.trainer_conf.seed);
+    //     let batcher_train = batcher::InternalBatcher::<B>::new(device.clone());
+    //     let batcher_valid = batcher::InternalBatcher::<B::InnerBackend>::new(device.clone());
+    //     let dataloader_train = DataLoaderBuilder::new(batcher_train)
+    //         .batch_size(self.trainer_conf.batch_size)
+    //         .shuffle(self.trainer_conf.seed)
+    //         .num_workers(self.trainer_conf.num_workers)
+    //         .build(dataloader::CustomDataset::new());
+    //     let dataloader_test = DataLoaderBuilder::new(batcher_valid)
+    //         .batch_size(self.trainer_conf.batch_size)
+    //         .shuffle(self.trainer_conf.seed)
+    //         .num_workers(self.trainer_conf.num_workers)
+    //         .build(dataloader::CustomDataset::new());
+    //     // for epoch in 1..self.trainer_conf.num_epochs + 1 {
+    //     //     for (iteration, batch) in dataloader_train.iter().enumerate() {
+    //     //         let output = self.model.forward(batch.addresses).into_data();
+    //     //     }
+    //     // }
+    //     Ok(())
+    // }
 }
 
 plugin!(MyDrive {});

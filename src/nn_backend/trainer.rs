@@ -33,7 +33,7 @@ fn main() {
         infer::<MyBackend>(
             "/tmp/guide",
             device.clone(),
-            super::dataloader::CustomDataset::new().get(i).unwrap(),
+            super::dataloader::CustomDataset::old_new().get(i).unwrap(),
         );
     }
 }
@@ -88,12 +88,12 @@ pub fn train<B: AutodiffBackend>(artifact_dir: &str, config: TrainingConfig, dev
         .batch_size(config.batch_size)
         .shuffle(config.seed)
         .num_workers(config.num_workers)
-        .build(super::dataloader::CustomDataset::new());
+        .build(super::dataloader::CustomDataset::old_new());
     let dataloader_test = DataLoaderBuilder::new(batcher_valid)
         .batch_size(config.batch_size)
         .shuffle(config.seed)
         .num_workers(config.num_workers)
-        .build(super::dataloader::CustomDataset::new());
+        .build(super::dataloader::CustomDataset::old_new());
     let learner = LearnerBuilder::new(artifact_dir)
         .metric_train_numeric(LossMetric::new())
         .metric_valid_numeric(LossMetric::new())
