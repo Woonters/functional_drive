@@ -1,36 +1,22 @@
+use burn::backend::Autodiff;
 #[allow(unused_variables)]
-use burn::{
-    backend::{wgpu::AutoGraphicsApi, Autodiff, Wgpu},
-    config::Config,
-    data::dataloader::batcher::Batcher,
-};
+use burn::backend::{wgpu::AutoGraphicsApi, Wgpu};
 mod nn_backend;
+use interface::TheNetwork;
 use nbdkit::*;
 use nn_backend::*;
 use trainer::TrainingConfig;
 
+type NetworkClamped = TheNetwork<Autodiff<Wgpu<AutoGraphicsApi, f32, i32>>>;
 #[derive()]
 struct MyDrive {
-    device: burn::backend::wgpu::WgpuDevice,
-    trainer_conf: TrainingConfig,
-    model: model::Model<Wgpu<AutoGraphicsApi, f32, i32>>,
+    storage_network: NetworkClamped,
 }
 
 impl Default for MyDrive {
     fn default() -> Self {
-        type MyBackend = Wgpu<AutoGraphicsApi, f32, i32>;
-        type MyAutoDiffBackend = Autodiff<MyBackend>;
-        let device = burn::backend::wgpu::WgpuDevice::default();
-        let trainer_conf = TrainingConfig::load("/temp/guide/config.json")
-            .expect("Config should exist for the model");
         Self {
-            model: model::ModelConfig {
-                input_size: 64,
-                output_size: 1,
-            }
-            .init(&device),
-            trainer_conf,
-            device,
+            storage_network: NetworkClamped::init(),
         }
     }
 }
@@ -45,29 +31,16 @@ impl Server for MyDrive {
     }
 
     fn read_at(&self, buf: &mut [u8], offset: u64) -> Result<()> {
-        // let's calculate the bits we need to get: offset * 8
-        let batcher = batcher::InternalBatcher::new(self.device.clone());
-        let batch = batcher.batch(
-            buf.iter()
-                .enumerate()
-                .map(|(i, &_v)| dataloader::DataItem {
-                    address: i as u64 + offset,
-                    value: 0u8,
-                })
-                .collect(),
-        );
-        self.model
-            .forward(batch.addresses)
-            .into_data()
-            .value
-            .iter()
-            .enumerate()
-            .for_each(|(i, &v)| buf[i] = v as u8);
-        Ok(())
+        match self.storage_network.read_at(buf, offset) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(nbdkit::Error::new(0, "Something has gone wrong")),
+        }
     }
-    #[allow(unused_variables)]
-    fn write_at(&self, buf: &[u8], offset: u64, flags: Flags) -> Result<()> {
-        todo!();
+    fn write_at(&self, buf: &[u8], offset: u64, _flags: Flags) -> Result<()> {
+        match self.storage_network.train(buf, offset) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(nbdkit::Error::new(0, "Something went wrong writing")),
+        }
         // self.nn_train(burn::backend::wgpu::WgpuDevice::default())
     }
 
@@ -76,29 +49,4 @@ impl Server for MyDrive {
     }
 }
 
-impl MyDrive {
-    // fn nn_train(&self, device: B::Device) -> Result<()> {
-    //     type B = Autodiff<Wgpu<AutoGraphicsApi, f32, i32>>;
-    //     B::seed(self.trainer_conf.seed);
-    //     let batcher_train = batcher::InternalBatcher::<B>::new(device.clone());
-    //     let batcher_valid = batcher::InternalBatcher::<B::InnerBackend>::new(device.clone());
-    //     let dataloader_train = DataLoaderBuilder::new(batcher_train)
-    //         .batch_size(self.trainer_conf.batch_size)
-    //         .shuffle(self.trainer_conf.seed)
-    //         .num_workers(self.trainer_conf.num_workers)
-    //         .build(dataloader::CustomDataset::new());
-    //     let dataloader_test = DataLoaderBuilder::new(batcher_valid)
-    //         .batch_size(self.trainer_conf.batch_size)
-    //         .shuffle(self.trainer_conf.seed)
-    //         .num_workers(self.trainer_conf.num_workers)
-    //         .build(dataloader::CustomDataset::new());
-    //     // for epoch in 1..self.trainer_conf.num_epochs + 1 {
-    //     //     for (iteration, batch) in dataloader_train.iter().enumerate() {
-    //     //         let output = self.model.forward(batch.addresses).into_data();
-    //     //     }
-    //     // }
-    //     Ok(())
-    // }
-}
-
-plugin!(MyDrive {});
+plugin!(MyDrive { write_at });

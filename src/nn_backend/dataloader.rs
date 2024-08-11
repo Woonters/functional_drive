@@ -19,7 +19,6 @@ pub struct DataItem {
     pub value: u8,
 }
 
-#[derive(Clone)]
 pub struct CustomDataset {
     pub overwrite_buf: Option<Vec<u8>>,
     pub buf_len: Option<usize>,
